@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8889330904:AAG4SO4Bxqi4f3cFlSE9Tu0lMlmW7fWBFjU"
-YOUR_CHAT_ID = "8804129581"
+YOUR_CHAT_ID = "8804129581"  # Твой ID для автоматических уведомлений
 # =====================
 
 logging.basicConfig(level=logging.INFO)
@@ -52,10 +52,10 @@ async def get_market_rate(currency):
             logging.error(f"Ошибка запроса {currency}: {e}")
             return None
 
-async def compare_and_alert(manual=False):
+async def compare_and_alert(chat_id, manual=False):
     cbr_rates = await get_cbr_rates()
     if not cbr_rates:
-        await bot.send_message(YOUR_CHAT_ID, "❌ Не удалось получить курсы ЦБ")
+        await bot.send_message(chat_id, "❌ Не удалось получить курсы ЦБ")
         return
     
     summary = []
@@ -79,30 +79,32 @@ async def compare_and_alert(manual=False):
                 f"📊 <b>Выгода:</b> {difference:.2f}% в пользу рынка\n"
                 f"🕒 {datetime.now().strftime('%H:%M:%S')}"
             )
-            await bot.send_message(YOUR_CHAT_ID, message, parse_mode="HTML")
+            await bot.send_message(chat_id, message, parse_mode="HTML")
             summary.append(f"✅ {currency_upper}: выгодно! Разница {difference:.2f}%")
         else:
             summary.append(f"📊 {currency_upper}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
     
     if manual:
-        await bot.send_message(YOUR_CHAT_ID, "📈 <b>Сводка по курсам:</b>\n" + "\n".join(summary), parse_mode="HTML")
+        await bot.send_message(chat_id, "📈 <b>Сводка по курсам:</b>\n" + "\n".join(summary), parse_mode="HTML")
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
         "Проверка курсов происходит каждые 4 часа.\n\n"
-        "➡️ Для ручной проверки отправь /check"
+        "➡️ Для ручной проверки отправь /check\n"
+        "➡️ Уведомления о выгодном курсе приходят автоматически (только владельцу)"
     )
 
 @dp.message(Command("check"))
 async def check_now(message: types.Message):
     await message.answer("🔄 Проверяю курсы сейчас...")
-    await compare_and_alert(manual=True)
+    await compare_and_alert(message.chat.id, manual=True)
 
 async def scheduler():
     while True:
-        await compare_and_alert(manual=False)
+        # Автоматические уведомления приходят только владельцу (твой ID)
+        await compare_and_alert(YOUR_CHAT_ID, manual=False)
         await asyncio.sleep(14400)
 
 @app.route('/')
