@@ -11,7 +11,6 @@ import xml.etree.ElementTree as ET
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8889330904:AAG4SO4Bxqi4f3cFlSE9Tu0lMlmW7fWBFjU"
 YOUR_CHAT_ID = "8804129581"
-API_KEY = "cur_live_nhI2RN7AztZR4gRUv1Bk1w8RWN2tCaCvCpPh6s7Y"
 # =====================
 
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +19,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 app = Flask(__name__)
 
-CURRENCIES = ["USD", "EUR", "GBP", "CNY"]
+CURRENCIES = ["usd", "eur", "gbp", "cny"]
 
 async def get_cbr_rates():
     url = "https://www.cbr.ru/scripts/XML_daily.asp"
@@ -31,22 +30,24 @@ async def get_cbr_rates():
     rates = {}
     for valute in root.findall("Valute"):
         char_code = valute.find("CharCode").text
-        if char_code in CURRENCIES:
+        if char_code.lower() in CURRENCIES:
             value = valute.find("Value").text.replace(",", ".")
             nominal = int(valute.find("Nominal").text)
-            rates[char_code] = float(value) / nominal
+            rates[char_code.upper()] = float(value) / nominal
     return rates
 
 async def get_market_rate(currency):
-    url = f"https://api.currencyapi.com/v3/latest?apikey={API_KEY}&base_currency={currency}&currencies=RUB"
+    """Рыночный курс с currency-api (бесплатно, без ключа, без лимитов)"""
+    url = f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{currency}.json"
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url, timeout=10) as response:
                 data = await response.json()
-                if data.get('data') and data['data'].get('RUB'):
-                    return float(data['data']['RUB']['value'])
+                rub_rate = data.get(currency, {}).get('rub')
+                if rub_rate:
+                    return float(rub_rate)
                 else:
-                    logging.error(f"API ошибка {currency}: {data}")
+                    logging.error(f"Не найден курс для {currency}")
                     return None
         except Exception as e:
             logging.error(f"Ошибка запроса {currency}: {e}")
@@ -59,9 +60,10 @@ async def compare_and_alert():
         return
     
     for currency in CURRENCIES:
-        if currency not in cbr_rates:
+        currency_upper = currency.upper()
+        if currency_upper not in cbr_rates:
             continue
-        cbr_rate = cbr_rates[currency]
+        cbr_rate = cbr_rates[currency_upper]
         market_rate = await get_market_rate(currency)
         
         if market_rate is None:
@@ -71,7 +73,7 @@ async def compare_and_alert():
             difference = ((cbr_rate - market_rate) / cbr_rate) * 100
             message = (
                 f"🔔 <b>ВНИМАНИЕ! Выгодный курс</b>\n"
-                f"💵 {currency} → RUB\n"
+                f"💵 {currency_upper} → RUB\n"
                 f"📉 <b>Рыночный курс:</b> {market_rate:.2f}\n"
                 f"🏦 <b>ЦБ РФ:</b> {cbr_rate:.2f}\n"
                 f"📊 <b>Выгода:</b> {difference:.2f}% в пользу рынка\n"
@@ -79,12 +81,13 @@ async def compare_and_alert():
             )
             await bot.send_message(YOUR_CHAT_ID, message, parse_mode="HTML")
         else:
-            logging.info(f"{currency}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
+            logging.info(f"{currency_upper}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
+        "Использую бесплатный API без лимитов.\n"
         "Проверка курсов происходит каждые 4 часа.\n\n"
         "➡️ Для ручной проверки отправь /check"
     )
@@ -97,7 +100,7 @@ async def check_now(message: types.Message):
 async def scheduler():
     while True:
         await compare_and_alert()
-        await asyncio.sleep(14400)  # 4 часа = 14400 секунд
+        await asyncio.sleep(14400)  # 4 часа
 
 @app.route('/')
 def home():
@@ -108,7 +111,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Проверка каждые 4 часа.")
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Рыночные курсы без лимитов.")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
