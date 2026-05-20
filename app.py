@@ -23,12 +23,10 @@ app = Flask(__name__)
 CURRENCIES = ["USD", "EUR", "GBP", "CNY"]
 
 async def get_cbr_rates():
-    """Получает официальные курсы ЦБ РФ"""
     url = "https://www.cbr.ru/scripts/XML_daily.asp"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             xml_data = await response.text()
-    
     root = ET.fromstring(xml_data)
     rates = {}
     for valute in root.findall("Valute"):
@@ -40,8 +38,7 @@ async def get_cbr_rates():
     return rates
 
 async def get_market_rate(currency):
-    """Получает рыночный курс через exchangerate.host с API-ключом"""
-    url = f"https://api.exchangerate.host/convert?from={currency}&to=RUB&access_key={API_KEY}"
+    url = f"http://api.exchangerate.host/convert?from={currency}&to=RUB&access_key={API_KEY}"
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url, timeout=10) as response:
@@ -56,13 +53,11 @@ async def get_market_rate(currency):
             return None
 
 async def compare_and_alert():
-    """Сравнивает курсы и отправляет уведомление"""
     cbr_rates = await get_cbr_rates()
     if not cbr_rates:
         await bot.send_message(YOUR_CHAT_ID, "❌ Не удалось получить курсы ЦБ")
         return
     
-    results = []
     for currency in CURRENCIES:
         if currency not in cbr_rates:
             continue
@@ -70,7 +65,7 @@ async def compare_and_alert():
         market_rate = await get_market_rate(currency)
         
         if market_rate is None:
-            results.append(f"❌ {currency}: не удалось получить рыночный курс")
+            await bot.send_message(YOUR_CHAT_ID, f"❌ Не удалось получить курс для {currency}")
             continue
         
         if market_rate < cbr_rate:
@@ -84,17 +79,11 @@ async def compare_and_alert():
                 f"🕒 {datetime.now().strftime('%H:%M:%S')}"
             )
             await bot.send_message(YOUR_CHAT_ID, message, parse_mode="HTML")
-            results.append(f"✅ {currency}: выгодно! Разница {difference:.2f}%")
-        else:
-            results.append(f"📊 {currency}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
-    
-    logging.info("\n".join(results))
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
-        "Использую API exchangerate.host\n"
         "Проверка курсов происходит каждый час.\n\n"
         "➡️ Для ручной проверки отправь /check"
     )
@@ -118,7 +107,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! API ключ настроен.")
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен!")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
