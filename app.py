@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8889330904:AAG4SO4Bxqi4f3cFlSE9Tu0lMlmW7fWBFjU"
 YOUR_CHAT_ID = "8804129581"
+API_KEY = "0e8f34ce0cd0e9fc19f915c4b87cd0e9"
 # =====================
 
 logging.basicConfig(level=logging.INFO)
@@ -39,19 +40,19 @@ async def get_cbr_rates():
     return rates
 
 async def get_market_rate(currency):
-    """Получает рыночный курс (аналог XE) через exchangerate.host"""
-    url = f"https://api.exchangerate.host/convert?from={currency}&to=RUB"
+    """Получает рыночный курс через exchangerate.host с API-ключом"""
+    url = f"https://api.exchangerate.host/convert?from={currency}&to=RUB&access_key={API_KEY}"
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(url, timeout=15) as response:
+            async with session.get(url, timeout=10) as response:
                 data = await response.json()
                 if data.get('success'):
                     return float(data['result'])
                 else:
-                    logging.error(f"API вернул ошибку для {currency}: {data}")
+                    logging.error(f"API ошибка {currency}: {data}")
                     return None
         except Exception as e:
-            logging.error(f"Ошибка запроса курса для {currency}: {e}")
+            logging.error(f"Ошибка запроса {currency}: {e}")
             return None
 
 async def compare_and_alert():
@@ -87,14 +88,13 @@ async def compare_and_alert():
         else:
             results.append(f"📊 {currency}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
     
-    # Отправляем сводку в лог
     logging.info("\n".join(results))
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
-        "Использую API exchangerate.host (аналог XE.com)\n"
+        "Использую API exchangerate.host\n"
         "Проверка курсов происходит каждый час.\n\n"
         "➡️ Для ручной проверки отправь /check"
     )
@@ -118,7 +118,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Использую рыночные курсы (аналог XE).")
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! API ключ настроен.")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
