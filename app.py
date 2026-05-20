@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8889330904:AAG4SO4Bxqi4f3cFlSE9Tu0lMlmW7fWBFjU"
-YOUR_CHAT_ID = "8804129581"  # Твой ID для автоматических уведомлений
+YOUR_CHAT_ID = "8804129581"
 # =====================
 
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +19,16 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 app = Flask(__name__)
 
-CURRENCIES = ["usd", "eur", "gbp", "cny"]
+# СПИСОК ВАЛЮТ (только 4)
+CURRENCIES = ["usd", "eur", "cny", "aed"]
+
+# Названия валют для красивого вывода
+CURRENCY_NAMES = {
+    "USD": "🇺🇸 Доллар США",
+    "EUR": "🇪🇺 Евро",
+    "CNY": "🇨🇳 Китайский юань",
+    "AED": "🇦🇪 Дирхам ОАЭ"
+}
 
 async def get_cbr_rates():
     url = "https://www.cbr.ru/scripts/XML_daily.asp"
@@ -59,6 +68,8 @@ async def compare_and_alert(chat_id, manual=False):
         return
     
     summary = []
+    alert_count = 0
+    
     for currency in CURRENCIES:
         currency_upper = currency.upper()
         if currency_upper not in cbr_rates:
@@ -69,11 +80,13 @@ async def compare_and_alert(chat_id, manual=False):
         if market_rate is None:
             continue
         
+        currency_name = CURRENCY_NAMES.get(currency_upper, currency_upper)
+        
         if market_rate < cbr_rate:
             difference = ((cbr_rate - market_rate) / cbr_rate) * 100
             message = (
                 f"🔔 <b>ВНИМАНИЕ! Выгодный курс</b>\n"
-                f"💵 {currency_upper} → RUB\n"
+                f"💵 {currency_name} → RUB\n"
                 f"📉 <b>Рыночный курс:</b> {market_rate:.2f}\n"
                 f"🏦 <b>ЦБ РФ:</b> {cbr_rate:.2f}\n"
                 f"📊 <b>Выгода:</b> {difference:.2f}% в пользу рынка\n"
@@ -81,29 +94,35 @@ async def compare_and_alert(chat_id, manual=False):
             )
             await bot.send_message(chat_id, message, parse_mode="HTML")
             summary.append(f"✅ {currency_upper}: выгодно! Разница {difference:.2f}%")
+            alert_count += 1
         else:
             summary.append(f"📊 {currency_upper}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
     
-    if manual:
-        await bot.send_message(chat_id, "📈 <b>Сводка по курсам:</b>\n" + "\n".join(summary), parse_mode="HTML")
+    if manual and summary:
+        summary_text = "\n".join(summary)
+        await bot.send_message(chat_id, f"📈 <b>Сводка по курсам:</b>\n{summary_text}", parse_mode="HTML")
+    elif manual and not summary:
+        await bot.send_message(chat_id, "❌ Не удалось получить курсы ни для одной валюты")
+    elif alert_count == 0 and manual:
+        await bot.send_message(chat_id, "ℹ️ Выгодных курсов в данный момент нет.")
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
-        "Проверка курсов происходит каждые 4 часа.\n\n"
+        f"📊 Отслеживается {len(CURRENCIES)} валют: USD, EUR, CNY, AED\n\n"
+        "⏰ Проверка курсов происходит каждые 4 часа.\n\n"
         "➡️ Для ручной проверки отправь /check\n"
         "➡️ Уведомления о выгодном курсе приходят автоматически (только владельцу)"
     )
 
 @dp.message(Command("check"))
 async def check_now(message: types.Message):
-    await message.answer("🔄 Проверяю курсы сейчас...")
+    await message.answer(f"🔄 Проверяю курсы {len(CURRENCIES)} валют...")
     await compare_and_alert(message.chat.id, manual=True)
 
 async def scheduler():
     while True:
-        # Автоматические уведомления приходят только владельцу (твой ID)
         await compare_and_alert(YOUR_CHAT_ID, manual=False)
         await asyncio.sleep(14400)
 
@@ -116,7 +135,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен!")
+    await bot.send_message(YOUR_CHAT_ID, f"✅ Бот запущен! Отслеживается {len(CURRENCIES)} валют: USD, EUR, CNY, AED.")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
