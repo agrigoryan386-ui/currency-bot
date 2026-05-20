@@ -38,7 +38,6 @@ async def get_cbr_rates():
     return rates
 
 async def get_market_rate(currency):
-    """Получает рыночный курс через CurrencyAPI с твоим ключом"""
     url = f"https://api.currencyapi.com/v3/latest?apikey={API_KEY}&base_currency={currency}&currencies=RUB"
     async with aiohttp.ClientSession() as session:
         try:
@@ -86,7 +85,7 @@ async def compare_and_alert():
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
-        "Проверка курсов происходит каждый час.\n\n"
+        "Проверка курсов происходит каждые 4 часа.\n\n"
         "➡️ Для ручной проверки отправь /check"
     )
 
@@ -98,7 +97,7 @@ async def check_now(message: types.Message):
 async def scheduler():
     while True:
         await compare_and_alert()
-        await asyncio.sleep(3600)
+        await asyncio.sleep(14400)  # 4 часа = 14400 секунд
 
 @app.route('/')
 def home():
@@ -109,7 +108,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! API ключ настроен.")
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Проверка каждые 4 часа.")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
