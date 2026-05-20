@@ -19,7 +19,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 app = Flask(__name__)
 
-# СПИСОК ВАЛЮТ (только 4)
+# СПИСОК ВАЛЮТ
 CURRENCIES = ["usd", "eur", "cny", "aed"]
 
 # Названия валют для красивого вывода
@@ -111,9 +111,8 @@ async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
         f"📊 Отслеживается {len(CURRENCIES)} валют: USD, EUR, CNY, AED\n\n"
-        "⏰ Проверка курсов происходит каждые 4 часа.\n\n"
-        "➡️ Для ручной проверки отправь /check\n"
-        "➡️ Уведомления о выгодном курсе приходят автоматически (только владельцу)"
+        "➡️ Для проверки курсов отправь /check\n"
+        "➡️ Уведомления приходят только по запросу"
     )
 
 @dp.message(Command("check"))
@@ -121,11 +120,7 @@ async def check_now(message: types.Message):
     await message.answer(f"🔄 Проверяю курсы {len(CURRENCIES)} валют...")
     await compare_and_alert(message.chat.id, manual=True)
 
-async def scheduler():
-    while True:
-        await compare_and_alert(YOUR_CHAT_ID, manual=False)
-        await asyncio.sleep(14400)
-
+# Эндпоинты для Render
 @app.route('/')
 def home():
     return "Бот работает! 🤖", 200
@@ -135,8 +130,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, f"✅ Бот запущен! Отслеживается {len(CURRENCIES)} валют: USD, EUR, CNY, AED.")
-    asyncio.create_task(scheduler())
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Работаю только по команде /check.")
     await dp.start_polling(bot, handle_signals=False)
 
 if __name__ == "__main__":
