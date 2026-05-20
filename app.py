@@ -1,9 +1,8 @@
 import os
 import logging
-import threading
 import asyncio
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 import aiohttp
@@ -15,20 +14,14 @@ BOT_TOKEN = "8889330904:AAG4SO4Bxqi4f3cFlSE9Tu0lMlmW7fWBFjU"
 YOUR_CHAT_ID = "8804129581"
 # =====================
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
-# Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
-# Создание Flask-приложения
 app = Flask(__name__)
 
-# Список валют
 CURRENCIES = ["USD", "EUR", "GBP", "CNY"]
 
-# --- ФУНКЦИИ БОТА (твои старые работают) ---
 async def get_cbr_rates():
     url = "https://www.cbr.ru/scripts/XML_daily.asp"
     async with aiohttp.ClientSession() as session:
@@ -92,7 +85,6 @@ async def compare_and_alert():
         else:
             logging.info(f"{currency}: ЦБ={cbr_rate:.2f}, XE={xe_rate:.2f}")
 
-# --- ОБРАБОТЧИКИ КОМАНД ---
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
@@ -106,13 +98,24 @@ async def check_now(message: types.Message):
     await message.answer("🔄 Проверяю курсы сейчас...")
     await compare_and_alert()
 
-# --- ФУНКЦИЯ ДЛЯ ФОНОВОЙ ЗАДАЧИ ---
 async def scheduler():
     while True:
         await compare_and_alert()
-        await asyncio.sleep(3600)  # Каждый час
+        await asyncio.sleep(3600)
 
-# --- ВЕБ-ИНТЕРФЕЙС ДЛЯ RENDER ---
+async def run_bot():
+    # Отправляем приветственное сообщение
+    try:
+        await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Буду следить за курсами.")
+    except:
+        logging.warning("Не удалось отправить приветственное сообщение")
+    
+    # Запускаем планировщик
+    asyncio.create_task(scheduler())
+    
+    # Запускаем поллинг (без обработки сигналов)
+    await dp.start_polling(bot, handle_signals=False)
+
 @app.route('/')
 def home():
     return "Бот работает! 🤖", 200
@@ -121,26 +124,14 @@ def home():
 def health():
     return "OK", 200
 
-# --- ТОЧКА ВХОДА ДЛЯ RENDER ---
-def run_web_app():
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
-
 def start_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    async def start():
-        # Запускаем планировщик в фоне
-        asyncio.create_task(scheduler())
-        # Запускаем поллинг
-        await dp.start_polling(bot)
-    
-    loop.run_until_complete(start())
+    asyncio.run(run_bot())
 
 if __name__ == '__main__':
+    import threading
     # Запускаем бота в отдельном потоке
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
     # Запускаем веб-сервер
-    run_web_app()
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
