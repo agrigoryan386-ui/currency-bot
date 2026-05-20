@@ -37,7 +37,6 @@ async def get_cbr_rates():
     return rates
 
 async def get_market_rate(currency):
-    """Рыночный курс с currency-api (бесплатно, без ключа, без лимитов)"""
     url = f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{currency}.json"
     async with aiohttp.ClientSession() as session:
         try:
@@ -53,12 +52,13 @@ async def get_market_rate(currency):
             logging.error(f"Ошибка запроса {currency}: {e}")
             return None
 
-async def compare_and_alert():
+async def compare_and_alert(manual=False):
     cbr_rates = await get_cbr_rates()
     if not cbr_rates:
         await bot.send_message(YOUR_CHAT_ID, "❌ Не удалось получить курсы ЦБ")
         return
     
+    summary = []
     for currency in CURRENCIES:
         currency_upper = currency.upper()
         if currency_upper not in cbr_rates:
@@ -80,14 +80,17 @@ async def compare_and_alert():
                 f"🕒 {datetime.now().strftime('%H:%M:%S')}"
             )
             await bot.send_message(YOUR_CHAT_ID, message, parse_mode="HTML")
+            summary.append(f"✅ {currency_upper}: выгодно! Разница {difference:.2f}%")
         else:
-            logging.info(f"{currency_upper}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
+            summary.append(f"📊 {currency_upper}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
+    
+    if manual:
+        await bot.send_message(YOUR_CHAT_ID, "📈 <b>Сводка по курсам:</b>\n" + "\n".join(summary), parse_mode="HTML")
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer(
         "🤖 Бот для сравнения курсов ЦБ и рыночных курсов запущен!\n"
-        "Использую бесплатный API без лимитов.\n"
         "Проверка курсов происходит каждые 4 часа.\n\n"
         "➡️ Для ручной проверки отправь /check"
     )
@@ -95,12 +98,12 @@ async def start_command(message: types.Message):
 @dp.message(Command("check"))
 async def check_now(message: types.Message):
     await message.answer("🔄 Проверяю курсы сейчас...")
-    await compare_and_alert()
+    await compare_and_alert(manual=True)
 
 async def scheduler():
     while True:
-        await compare_and_alert()
-        await asyncio.sleep(14400)  # 4 часа
+        await compare_and_alert(manual=False)
+        await asyncio.sleep(14400)
 
 @app.route('/')
 def home():
@@ -111,7 +114,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Рыночные курсы без лимитов.")
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен!")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
