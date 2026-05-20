@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 # ===== НАСТРОЙКИ =====
 BOT_TOKEN = "8889330904:AAG4SO4Bxqi4f3cFlSE9Tu0lMlmW7fWBFjU"
 YOUR_CHAT_ID = "8804129581"
-API_KEY = "0e8f34ce0cd0e9fc19f915c4b87cd0e9"
+API_KEY = "cur_live_nhI2RN7AztZR4gRUv1Bk1w8RWN2tCaCvCpPh6s7Y"
 # =====================
 
 logging.basicConfig(level=logging.INFO)
@@ -38,13 +38,14 @@ async def get_cbr_rates():
     return rates
 
 async def get_market_rate(currency):
-    url = f"http://api.exchangerate.host/convert?from={currency}&to=RUB&access_key={API_KEY}"
+    """Получает рыночный курс через CurrencyAPI с твоим ключом"""
+    url = f"https://api.currencyapi.com/v3/latest?apikey={API_KEY}&base_currency={currency}&currencies=RUB"
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url, timeout=10) as response:
                 data = await response.json()
-                if data.get('success'):
-                    return float(data['result'])
+                if data.get('data') and data['data'].get('RUB'):
+                    return float(data['data']['RUB']['value'])
                 else:
                     logging.error(f"API ошибка {currency}: {data}")
                     return None
@@ -65,7 +66,6 @@ async def compare_and_alert():
         market_rate = await get_market_rate(currency)
         
         if market_rate is None:
-            await bot.send_message(YOUR_CHAT_ID, f"❌ Не удалось получить курс для {currency}")
             continue
         
         if market_rate < cbr_rate:
@@ -79,6 +79,8 @@ async def compare_and_alert():
                 f"🕒 {datetime.now().strftime('%H:%M:%S')}"
             )
             await bot.send_message(YOUR_CHAT_ID, message, parse_mode="HTML")
+        else:
+            logging.info(f"{currency}: ЦБ={cbr_rate:.2f}, Рынок={market_rate:.2f}")
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
@@ -107,7 +109,7 @@ def health():
     return "OK", 200
 
 async def main():
-    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен!")
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! API ключ настроен.")
     asyncio.create_task(scheduler())
     await dp.start_polling(bot, handle_signals=False)
 
