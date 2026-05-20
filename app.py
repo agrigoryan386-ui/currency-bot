@@ -103,19 +103,6 @@ async def scheduler():
         await compare_and_alert()
         await asyncio.sleep(3600)
 
-async def run_bot():
-    # Отправляем приветственное сообщение
-    try:
-        await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Буду следить за курсами.")
-    except:
-        logging.warning("Не удалось отправить приветственное сообщение")
-    
-    # Запускаем планировщик
-    asyncio.create_task(scheduler())
-    
-    # Запускаем поллинг (без обработки сигналов)
-    await dp.start_polling(bot, handle_signals=False)
-
 @app.route('/')
 def home():
     return "Бот работает! 🤖", 200
@@ -124,14 +111,17 @@ def home():
 def health():
     return "OK", 200
 
-def start_bot():
-    asyncio.run(run_bot())
+# ГЛАВНАЯ ФУНКЦИЯ — ЗАПУСКАЕТ БОТА В ОСНОВНОМ ПОТОКЕ
+async def main():
+    await bot.send_message(YOUR_CHAT_ID, "✅ Бот запущен! Буду следить за курсами.")
+    asyncio.create_task(scheduler())
+    await dp.start_polling(bot, handle_signals=False)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    # Запускаем Flask в отдельном потоке, а бота — в основном
     import threading
-    # Запускаем бота в отдельном потоке
-    bot_thread = threading.Thread(target=start_bot, daemon=True)
-    bot_thread.start()
-    # Запускаем веб-сервер
     port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port), daemon=True)
+    flask_thread.start()
+    # Запускаем бота в основном потоке
+    asyncio.run(main())
